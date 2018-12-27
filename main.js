@@ -16,6 +16,15 @@ process.stdin.on("end", function() {
 const whitespaces = [" ", "\t", "\n", "\r"]
 const pdigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
+// function removeWhitespaces(string) {
+// 	let i = 0
+// 	while (whitespaces.some(w => w === string[i])) {
+// 		i++
+// 	}
+
+// 	return string.slice(i)
+// }
+
 // return [valid:bool, data:string, remainning string: string]
 function parseString(string) {
 	let i = 0
@@ -27,6 +36,10 @@ function parseString(string) {
 		return [false, null, string]
 	}
 	i++
+
+	if (string[i] === "\"") {
+		return [true, "", string.slice(i+1)]
+	}
 
 	let j = i
 	while (!(string[j] !== "\\" && string[j + 1] === "\"")) {
@@ -63,6 +76,13 @@ function parseNumber(string) {
 		if (!pdigits.some(d => d === string[j])) {
 			return [false, null, string]
 		}
+	}
+
+	while (pdigits.some(d => d === string[j])) {
+		j++
+	}
+	if (string[j] === ".") {
+		j++
 	}
 
 	while (pdigits.some(d => d === string[j])) {
@@ -154,6 +174,67 @@ function parseNull(string) {
 	return [false, null, string]
 }
 
+// return [valid:bool, data:object, remainning string: string]
+function parseObject(string) {
+	let i = 0
+
+	while (whitespaces.some(w => w === string[i])) {
+		i++
+	}
+
+	if (string[i] !== "{") {
+		return [false, null, string]
+	}
+	i++
+
+	while (whitespaces.some(w => w === string[i])) {
+		i++
+	}
+
+	if(string[i] === "}") {
+		return [true, {}, string.slice(i+1)]
+	}
+
+	let dataObj = {}, key = ""
+	let [status, data, str] = parseString(string.slice(i))
+	
+	i = 0
+
+	while (whitespaces.some(w => w === str[i])) {
+		i++
+	}
+	
+	if (!status || !str || str[i] !== ":") {
+		return [false, null, string]
+	}
+	key = data;
+	[status, data, str] = parsePartialJson(str.slice(i+1))
+
+	while (status && str && str[0] === ",") {
+		dataObj[key] = data;
+
+		[status, data, str] = parseString(str.slice(1))
+		
+		if (!status || !str || str[0] !== ":") {
+			return [false, null, string]
+		}
+		key = data;
+		[status, data, str] = parsePartialJson(str.slice(1))
+	}
+	dataObj[key] = data
+
+	i = 0
+	if(str[i] !== "}") {
+		return [false, data, str]
+	}
+	i++
+
+	while (whitespaces.some(w => w === str[i])) {
+		i++
+	}
+
+	return [true, dataObj, str.slice(i)]
+}
 // return [valid:bool, data:array, remainning string: string]
 function parseArray(string) {
 	let i = 0
@@ -166,6 +247,14 @@ function parseArray(string) {
 		return [false, null, string]
 	}
 	i++
+
+	while (whitespaces.some(w => w === string[i])) {
+		i++
+	}
+
+	if(string[i] === "]") {
+		return [true, [], string.slice(i+1)]
+	}
 
 	let dataArr = []
 	let [status, data, str] = parsePartialJson(string.slice(i))
@@ -216,15 +305,15 @@ function parsePartialJson(string) {
 	}
 	[status, data, str] = parseArray(string)
 
+	if (status) {
+		return [status, data, str]
+	}
+	[status, data, str] = parseObject(string)
+
 	// if (status) {
 	return [status, data, str]
 	// }
 }
-
-// // return [valid:bool, data:object, remainning string: string]
-// function parseObject(i, string) {
-
-// }
 
 // return [valid:bool, data:mapped data]
 function parseJson(string) {
@@ -258,12 +347,18 @@ function parseJson(string) {
 	if (status && !str) {
 		return [true, data]
 	}
+	[status, data, str] = parseObject(string)
 
-	return [false, null, str]
+	if (status && !str) {
+		return [true, data]
+	}
+
+	return [false, string]
 }
 
 function main() {
 
-	console.log(parseJson(inputString))
+	console.log(parseJson(inputString)[1])
+	console.log(JSON.parse(inputString))
 
 }
