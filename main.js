@@ -16,21 +16,56 @@ process.stdin.on("end", function() {
 const whitespaces = [" ", "\t", "\n", "\r"]
 const pdigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
-// function removeWhitespaces(string) {
-// 	let i = 0
-// 	while (whitespaces.some(w => w === string[i])) {
-// 		i++
-// 	}
+function stringParser(string) {
+	if (string && string[0] !== "\"") {
+		return null
+	}
+	let j = 1
+	while (j < string.length && !(string[j-1] !== "\\" && string[j] === "\"")) {
+		j++
+	}
 
-// 	return string.slice(i)
-// }
+	return [string.slice(0,j+1), string.slice(j+1)]
+}
+
+function tokenParser(string) {
+	let isString = stringParser(string)
+	if(isString) {
+		if(!isString[1]) {
+			return isString[0]
+		}
+		return isString[0] + removeWhitespaces(isString[1])
+	}
+
+	let i = 0
+
+	while(i < string.length && whitespaces.every(w => w !== string[i]) && string[i] !== "\"") {
+		i++
+	}
+
+	if(i == string.length) {
+		return string.slice(0, i)
+	}
+
+	return string.slice(0, i) + removeWhitespaces(string.slice(i))
+}
+
+function removeWhitespaces(string) {
+	let i = 0
+	while (i < string.length && whitespaces.some(w => w === string[i])) {
+		i++
+	}
+
+	if (i == string.length) {
+		return string.slice(i)
+	}
+
+	return tokenParser(string.slice(i))
+}
 
 // return [valid:bool, data:string, remainning string: string]
 function parseString(string) {
 	let i = 0
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
 
 	if (string[i] !== "\"") {
 		return [false, null, string]
@@ -49,21 +84,12 @@ function parseString(string) {
 	const data = string.slice(i, j + 1)
 	j += 2
 
-	while (whitespaces.some(w => w === string[j])) {
-		j++
-	}
-
 	return [true, data, string.slice(j)]
 }
 
 // return [valid:bool, data:number, remainning string: string]
 function parseNumber(string) {
-	let i = 0
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
-
-	let j = i
+	let j = 0
 	if (string[j] === "-") {
 		j++
 		if (!pdigits.some(d => d === string[j])) {
@@ -104,71 +130,32 @@ function parseNumber(string) {
 		j++
 	}
 
-	if (j === i) {
+	if (j === 0) {
 		return [false, null, string]
 	}
 
-	const data = parseFloat(string.slice(i, j))
-
-	while (whitespaces.some(w => w === string[j])) {
-		j++
-	}
+	const data = parseFloat(string.slice(0, j))
 
 	return [true, data, string.slice(j)]
 }
 
-// return [valid:bool, data:bool, remainning string: string]
-function parseTrue(string) {
-	let i = 0
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
-
-	if ((string.length - i) >= 4 && string.slice(i, i + 4) === "true") {
-		i += 4
-		while (whitespaces.some(w => w === string[i])) {
-			i++
-		}
-
-		return [true, true, string.slice(i)]
-	}
-
-	return [false, null, string]
-}
-
-// return [valid:bool, data:bool, remainning string: string]
-function parseFalse(string) {
-	let i = 0
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
-
-	if ((string.length - i) >= 5 && string.slice(i, i + 5) === "false") {
-		i += 5
-		while (whitespaces.some(w => w === string[i])) {
-			i++
-		}
-
-		return [true, false, string.slice(i)]
+// return [valid:bool, data:null, remainning string: string]
+function parseNull(string) {
+	if (string.length >= 4 && string.slice(0, 4) === "null") {
+		return [true, null, string.slice(4)]
 	}
 
 	return [false, null, string]
 }
 
 // return [valid:bool, data:null, remainning string: string]
-function parseNull(string) {
-	let i = 0
-	while (whitespaces.some(w => w === string[i])) {
-		i++
+function parseBool(string) {
+	if (string.length >= 4 && string.slice(0, 4) === "true") {
+		return [true, true, string.slice(4)]
 	}
 
-	if ((string.length - i) >= 4 && string.slice(i, i + 4) === "null") {
-		i += 4
-		while (whitespaces.some(w => w === string[i])) {
-			i++
-		}
-
-		return [true, null, string.slice(i)]
+	if (string.length >= 5 && string.slice(0, 5) === "false") {
+		return [true, false, string.slice(5)]
 	}
 
 	return [false, null, string]
@@ -176,189 +163,99 @@ function parseNull(string) {
 
 // return [valid:bool, data:object, remainning string: string]
 function parseObject(string) {
-	let i = 0
+	if (string[0] === "{") {
+		let i = 1
+		if(string[i] === "}") {
+			return [true, {}, string.slice(i+1)]
+		}
 
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
+		let dataObj = {}, key = ""
+		let [status, data, str] = parseString(string.slice(i))
 
-	if (string[i] !== "{") {
-		return [false, null, string]
-	}
-	i++
+		i = 0
 
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
-
-	if(string[i] === "}") {
-		return [true, {}, string.slice(i+1)]
-	}
-
-	let dataObj = {}, key = ""
-	let [status, data, str] = parseString(string.slice(i))
-	
-	i = 0
-
-	while (whitespaces.some(w => w === str[i])) {
-		i++
-	}
-	
-	if (!status || !str || str[i] !== ":") {
-		return [false, null, string]
-	}
-	key = data;
-	[status, data, str] = parsePartialJson(str.slice(i+1))
-
-	while (status && str && str[0] === ",") {
-		dataObj[key] = data;
-
-		[status, data, str] = parseString(str.slice(1))
-		
-		if (!status || !str || str[0] !== ":") {
+		if (!status || !str || str[i] !== ":") {
 			return [false, null, string]
 		}
 		key = data;
-		[status, data, str] = parsePartialJson(str.slice(1))
-	}
-	dataObj[key] = data
+		[status, data, str] = parsePartialJson(str.slice(i+1))
 
-	i = 0
-	if(str[i] !== "}") {
-		return [false, data, str]
-	}
-	i++
+		while (status && str && str[0] === ",") {
+			dataObj[key] = data;
 
-	while (whitespaces.some(w => w === str[i])) {
+			[status, data, str] = parseString(str.slice(1))
+
+			if (!status || !str || str[0] !== ":") {
+				return [false, null, string]
+			}
+			key = data;
+			[status, data, str] = parsePartialJson(str.slice(1))
+		}
+		dataObj[key] = data
+
+		i = 0
+		if(str[i] !== "}") {
+			return [false, data, str]
+		}
 		i++
+
+		return [true, dataObj, str.slice(i)]
 	}
 
-	return [true, dataObj, str.slice(i)]
+	return [false, null, string]
 }
 // return [valid:bool, data:array, remainning string: string]
 function parseArray(string) {
-	let i = 0
+	if (string && string[0] === "[") {
+		let i = 1
 
-	while (whitespaces.some(w => w === string[i])) {
+		if(string.length >= 2 && string[i] === "]") {
+			return [true, [], string.slice(i+1)]
+		}
+
+		let dataArr = []
+		let [status, data, str] = parsePartialJson(string.slice(i))
+		while (status && str && str[0] === ",") {
+			dataArr.push(data);
+			[status, data, str] = parsePartialJson(str.slice(1))
+		}
+		dataArr.push(data)
+
+		i = 0
+		if(str[i] !== "]") {
+			return [false, data, str]
+		}
 		i++
-	}
 
-	if (string[i] !== "[") {
-		return [false, null, string]
+		return [true, dataArr, str.slice(i)]
 	}
-	i++
-
-	while (whitespaces.some(w => w === string[i])) {
-		i++
-	}
-
-	if(string[i] === "]") {
-		return [true, [], string.slice(i+1)]
-	}
-
-	let dataArr = []
-	let [status, data, str] = parsePartialJson(string.slice(i))
-	while (status && str && str[0] === ",") {
-		dataArr.push(data);
-		[status, data, str] = parsePartialJson(str.slice(1))
-	}
-	dataArr.push(data)
-
-	i = 0
-	if(str[i] !== "]") {
-		return [false, data, str]
-	}
-	i++
-
-	while (whitespaces.some(w => w === str[i])) {
-		i++
-	}
-
-	return [true, dataArr, str.slice(i)]
+	return [false, null, string]
 }
 
+const parsers = [parseNull, parseBool, parseNumber, parseString, parseArray, parseObject]
 function parsePartialJson(string) {
-	let [status, data, str] = parseNull(string)
-
-	if (status) {
-		return [status, data, str]
+	for(let p of parsers) {
+		let [status, data, str] = p(string)
+		if (status) {
+			return [status, data, str]
+		}
 	}
-	[status, data, str] = parseTrue(string)
-
-	if (status) {
-		return [status, data, str]
-	}
-	[status, data, str] = parseFalse(string)
-
-	if (status) {
-		return [status, data, str]
-	}
-	[status, data, str] = parseNumber(string)
-
-	if (status) {
-		return [status, data, str]
-	}
-	[status, data, str] = parseString(string)
-
-	if (status) {
-		return [status, data, str]
-	}
-	[status, data, str] = parseArray(string)
-
-	if (status) {
-		return [status, data, str]
-	}
-	[status, data, str] = parseObject(string)
-
-	// if (status) {
-	return [status, data, str]
-	// }
+	return [false, null, string]
 }
 
 // return [valid:bool, data:mapped data]
 function parseJson(string) {
-	let [status, data, str] = parseNull(string)
-
-	if (status && !str) {
-		return [true, data]
-	}
-	[status, data, str] = parseTrue(string)
-
-	if (status && !str) {
-		return [true, data]
-	}
-	[status, data, str] = parseFalse(string)
-
-	if (status && !str) {
-		return [true, data]
-	}
-	[status, data, str] = parseNumber(string)
-
-	if (status && !str) {
-		return [true, data]
-	}
-	[status, data, str] = parseString(string)
-
-	if (status && !str) {
-		return [true, data]
-	}
-	[status, data, str] = parseArray(string)
-
-	if (status && !str) {
-		return [true, data]
-	}
-	[status, data, str] = parseObject(string)
-
-	if (status && !str) {
-		return [true, data]
+	let status, data, str
+	for(let p of parsers) {
+		[status, data, str] = p(string)
+		if (status && !str) {
+			return [true, data]
+		}
 	}
 
 	return [false, string]
 }
 
 function main() {
-
-	console.log(parseJson(inputString)[1])
-	console.log(JSON.parse(inputString))
-
+	console.log(parseJson(tokenParser(inputString)))
 }
