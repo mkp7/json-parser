@@ -1,172 +1,92 @@
-const whitespaces = [" ", "\t", "\n", "\r"]
-const pdigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+const parsers = [parseNull, parseBool, parseNumber, parseString, parseArray, parseObject, null]
 
-function parseWhitespace(string) {
-	let i = 0
-	while (i < string.length && whitespaces.some(w => w === string[i])) i++
-
-	return string.slice(i)
+// return [null || data:string, remainning_string: string]
+function parseString (string) {
+  const exp = /^\s*"((\\(["\\\/bfnrt]|u[a-fA-F0-9]{4})|[^"\\\0-\x1F\x7F]+)*)"\s*/
+  let match = exp.exec(string)
+  if (match === null) return null
+  return [match[1], string.slice(match[0].length)]
 }
 
-// return [null || data:string, remainning string: string]
-function parseString(string) {
-	string = parseWhitespace(string)
-	if (string[0] !== "\"") return null
-	if (string[1] === "\"") return ["", parseWhitespace(string.slice(2))]
-
-	let j = 1
-	while (!(string[j] !== "\\" && string[j + 1] === "\"")) j++
-	const data = string.slice(1, j + 1)
-
-	return [data, parseWhitespace(string.slice(j+2))]
+// return [null || data:number, remainning_string: string]
+function parseNumber (string) {
+  const exp = /^\s*(-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?)\s*/
+  let match = exp.exec(string)
+  if (match === null) return null
+  return [parseFloat(match[1]), string.slice(match[0].length)]
 }
 
-// return [null || data:number, remainning string: string]
-function parseNumber(string) {
-	string = parseWhitespace(string)
-	let j = 0
-	if (string[j] === "-") {
-		j++
-		if (!pdigits.some(d => d === string[j])) return null
-	}
-
-	if (string[j] === "0" && string[j + 1] === ".") {
-		j += 2
-		if (!pdigits.some(d => d === string[j])) return null
-	}
-
-	while (pdigits.some(d => d === string[j])) j++
-	if (string[j] === ".") j++
-
-	while (pdigits.some(d => d === string[j])) j++
-
-	if (string[j] === "e" || string[j] === "E") {
-		j++
-		if (string[j] === "+" || string[j] === "-") j++
-
-		if (!pdigits.some(d => d === string[j])) return null
-	}
-
-	while (pdigits.some(d => d === string[j])) j++
-
-	if (j === 0) return null
-
-	const data = parseFloat(string.slice(0, j))
-
-	return [data, parseWhitespace(string.slice(j))]
+// return [null || data:null, remainning_string: string]
+function parseNull (string) {
+  let match = /^\s*(null)\s*/.exec(string)
+  if (match === null) return null
+  return [null, string.slice(match[0].length)]
 }
 
-// return [null || data:null, remainning string: string]
-function parseNull(string) {
-	string = parseWhitespace(string)
-	if (string.length >= 4 && string.slice(0, 4) === "null") {
-		return [null, parseWhitespace(string.slice(4))]
-	}
-
-	return null
+// return [null || data:null, remainning_string: string]
+function parseBool (string) {
+  let match = /^\s*(true)\s*/.exec(string)
+  if (match !== null) return [true, string.slice(match[0].length)]
+  match = /^\s*(false)\s*/.exec(string)
+  if (match !== null) return [false, string.slice(match[0].length)]
+  return null
 }
 
-// return [null || data:null, remainning string: string]
-function parseBool(string) {
-	string = parseWhitespace(string)
-	if (string.length >= 4 && string.slice(0, 4) === "true") {
-		return [true, parseWhitespace(string.slice(4))]
-	}
-
-	if (string.length >= 5 && string.slice(0, 5) === "false") {
-		return [false, parseWhitespace(string.slice(5))]
-	}
-
-	return null
+// return [null || data:object, remainning_string: string]
+function parseObject (string) {
+  let match = /^\s*\{\s*/.exec(string)
+  if (match !== null) {
+    string = string.slice(match[0].length)
+    if (string[0] === '}') return [[], string.slice(/^\}\s*/.exec(string)[0].length)]
+    let [data, key, value] = [{}, '', parseString(string.slice(0))]
+    if (value === null || !value[1] || value[1][0] !== ':') return null
+    key = value[0]; value = parseValue(value[1].slice(1))
+    while (value !== null && value[1] && value[1][0] === ',') {
+      data[key] = value[0]
+      value = parseString(value[1].slice(1))
+      if (value === null || !value[1] || value[1][0] !== ':') return null
+      key = value[0]; value = parseValue(value[1].slice(1))
+    }
+    if (value === null || !value[1] || value[1][0] !== '}') return null
+    data[key] = value[0]
+    return [data, value[1].slice(/^\}\s*/.exec(value[1])[0].length)]
+  }
+  return null
 }
 
-// return [null || data:object, remainning string: string]
-function parseObject(string) {
-	string = parseWhitespace(string)
-	if (string[0] === "{") {
-		string = parseWhitespace(string.slice(1))
-		if(string[0] === "}") {
-			return [{}, parseWhitespace(string.slice(1))]
-		}
-
-		let dataObj = {}, key = ""
-		let parse = parseString(string.slice(0))
-
-		let i = 0
-
-		if (parse === null || !parse[1] || parse[1][i] !== ":") {
-			return null
-		}
-		key = parse[0]
-		parse = parseValue(parse[1].slice(i+1))
-
-		while (parse !== null && parse[1] && parse[1][0] === ",") {
-			dataObj[key] = parse[0]
-
-			parse = parseString(parse[1].slice(1))
-
-			if (parse === null || !parse[1] || parse[1][0] !== ":") {
-				return null
-			}
-			key = parse[0]
-			parse = parseValue(parse[1].slice(1))
-		}
-		dataObj[key] = parse[0]
-
-		i = 0
-		if(parse[1][i] !== "}") {
-			return null
-		}
-		i++
-
-		return [dataObj, parseWhitespace(parse[1].slice(i))]
-	}
-
-	return null
-}
-// return [null || data:array, remainning string: string]
-function parseArray(string) {
-	string = parseWhitespace(string)
-	if (string && string[0] === "[") {
-		string = parseWhitespace(string.slice(1))
-		if(string && string[0] === "]") {
-			return [[], parseWhitespace(string.slice(1))]
-		}
-
-		let dataArr = []
-		let parse = parseValue(string)
-		while (parse !== null && parse[1] && parse[1][0] === ",") {
-			dataArr.push(parse[0])
-			parse = parseValue(parse[1].slice(1))
-		}
-		dataArr.push(parse[0])
-
-		if(parse[1][0] !== "]") {
-			return null
-		}
-
-		return [dataArr, parseWhitespace(parse[1].slice(1))]
-	}
-	return null
+// return [null || data:array, remainning_string: string]
+function parseArray (string) {
+  let match = /^\s*\[\s*/.exec(string)
+  if (match !== null) {
+    string = string.slice(match[0].length)
+    if (string[0] === ']') return [[], string.slice(/^\]\s*/.exec(string)[0].length)]
+    let [data, value] = [[], parseValue(string)]
+    while (value !== null && value[1] && value[1][0] === ',') {
+      data.push(value[0])
+      value = parseValue(value[1].slice(1))
+    }
+    if (value === null || !value[1] || value[1][0] !== ']') return null
+    data.push(value[0])
+    return [data, value[1].slice(/^\]\s*/.exec(value[1])[0].length)]
+  }
+  return null
 }
 
-const parsers = [parseNull, parseBool, parseNumber, parseString, parseArray, parseObject]
-// return [null || data:array, remainning string: string]
-function parseValue(string) {
-	for(let p of parsers) {
-		let parse = p(string)
-		if (parse !== null) return parse
-	}
+// return [null || data:array, remainning_string: string]
+function parseValue (string) {
+  let parser = factoryParser(string)
+  return parser === null ? null : parser(string)
+}
 
-	return null
+function factoryParser (string) {
+  return parsers.reduce((a, f) => (a(string) === null ? f : a))
 }
 
 // return [null || data:mapped data]
-function parseJson(string) {
-	let parse = parseValue(string)
-	if (parse !== null && !parse[1]) return [true, parse[0]]
-
-	return [false, string]
+function parseJson (string) {
+  let data = parseValue(string)
+  console.log(factoryParser(string))
+  return (data !== null && !data[1]) ? [true, data[0]] : [false, string]
 }
 
 module.exports = parseJson
