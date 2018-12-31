@@ -1,4 +1,4 @@
-const parsers = [parseNull, parseBool, parseNumber, parseString, parseArray, parseObject, null]
+const parsers = [parseNull, parseBool, parseNumber, parseString, parseArray, parseObject]
 
 // return [null || data:string, remainning_string: string]
 function parseString (string) {
@@ -74,19 +74,12 @@ function parseArray (string) {
 
 // return [null || data:array, remainning_string: string]
 function parseValue (string) {
-  console.log(string)
-  // return factoryParser(string) === null ? null : factoryParser(string)(string)
   return parsers.slice(1).reduce((a, f) => (a === null ? f(string) : a), parsers[0](string))
-}
-
-function factoryParser (string) {
-  return parsers.reduce((a, f) => (a(string) === null ? f : a))
 }
 
 // return [null || data:mapped data]
 function parseJson (string) {
   let data = parseValue(string)
-  // console.log(factoryParser(string))
   return (data !== null && !data[1]) ? [true, data[0]] : [false, string]
 }
 
