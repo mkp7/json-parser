@@ -1,4 +1,4 @@
-const parsers = [parseNull, parseBool, parseNumber, parseString, parseArray, parseObject]
+const parsers = [[/^\s*n/, parseNull], [/^\s*(t|f)/, parseBool], [/^\s*(-?(0|[1-9]))/, parseNumber], [/^\s*"/, parseString], [/^\s*\[/, parseArray], [/^\s*\{/, parseObject], [null, null]]
 
 // return [null || data:string, remainning_string: string]
 function parseString (string) {
@@ -74,7 +74,12 @@ function parseArray (string) {
 
 // return [null || data:array, remainning_string: string]
 function parseValue (string) {
-  return parsers.slice(1).reduce((a, f) => (a === null ? f(string) : a), parsers[0](string))
+  let parser = factoryParser(string)
+  return parser === null ? null : parser(string)
+}
+
+function factoryParser (string) {
+  return parsers.reduce((a, f) => (a[0].exec(string) === null ? f : a))[1]
 }
 
 // return [null || data:mapped data]
